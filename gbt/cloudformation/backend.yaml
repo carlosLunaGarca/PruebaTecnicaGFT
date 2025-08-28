@@ -1,0 +1,214 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy GBT Spring Boot application on AWS with MongoDB Atlas
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: prod
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9-]*'
+    ConstraintDescription: Must start with a letter and contain only alphanumeric characters and hyphens.
+    Description: Environment name (e.g., dev, staging, prod)
+  
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where resources will be launched
+    
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of subnet IDs for the ECS service
+    
+  ContainerPort:
+    Type: Number
+    Default: 8080
+    Description: Port on which the container listens for requests
+    
+  ContainerCpu:
+    Type: Number
+    Default: 512
+    Description: CPU units for the container (1 vCPU = 1024 CPU units)
+    
+  ContainerMemory:
+    Type: Number
+    Default: 1024
+    Description: Memory for the container (in MiB)
+    
+  DesiredCount:
+    Type: Number
+    Default: 1
+    Description: Number of tasks to run
+    
+  MongoDBUri:
+    Type: String
+    Description: MongoDB Atlas connection string
+    NoEcho: true
+    
+  AppName:
+    Type: String
+    Default: gbt-application
+    Description: Application name
+
+Resources:
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${AppName}-${EnvironmentName}-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AppName}-${EnvironmentName}-task
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub ${AppName}-${EnvironmentName}-container
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+          Environment:
+            - Name: SPRING_DATA_MONGODB_URI
+              Value: !Ref MongoDBUri
+            - Name: APP_SECURITY_CLIENT_USERNAME
+              Value: client
+            - Name: APP_SECURITY_CLIENT_PASSWORD
+              Value: client123
+            - Name: APP_SECURITY_ADMIN_USERNAME
+              Value: admin
+            - Name: APP_SECURITY_ADMIN_PASSWORD
+              Value: admin123
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  # ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ListenerRule
+    Properties:
+      ServiceName: !Sub ${AppName}-${EnvironmentName}-service
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: !Ref DesiredCount
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref ContainerSecurityGroup
+          Subnets: !Ref SubnetIds
+      TaskDefinition: !Ref TaskDefinition
+
+  # Security Group for ECS Tasks
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          CidrIp: 0.0.0.0/0
+
+  # IAM Roles and Policies
+  ECSExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${AppName}-${EnvironmentName}-task-policy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !GetAtt CloudWatchLogsGroup.Arn
+
+  # CloudWatch Logs
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${AppName}-${EnvironmentName}
+      RetentionInDays: 30
+
+  # ECR Repository
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${AppName}-${EnvironmentName}
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+
+  # Outputs
+  ServiceURL:
+    Description: URL of the service
+    Value: !Sub http://${LoadBalancer.DNSName}
+
+  ECRRepositoryURI:
+    Description: ECR Repository URI
+    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}
+
+  TaskDefinitionARN:
+    Description: ECS Task Definition ARN
+    Value: !Ref TaskDefinition
+    Properties:
+      ApplicationName: !Ref ApplicationName
+      EnvironmentName: !Ref EnvironmentName
+      SolutionStackName: "64bit Amazon Linux 2023 v4.3.3 running Corretto 17"
+      VersionLabel: !Ref ApplicationVersion
+      OptionSettings:
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: MONGODB_URI
+          Value: !Ref MongoDbUri
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SECURITY_CLIENT_USERNAME
+          Value: !Ref ClientUsername
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SECURITY_CLIENT_PASSWORD
+          Value: !Ref ClientPassword
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SECURITY_ADMIN_USERNAME
+          Value: !Ref AdminUsername
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SECURITY_ADMIN_PASSWORD
+          Value: !Ref AdminPassword
+
+Outputs:
+  ApplicationUrl:
+    Description: URL of the Elastic Beanstalk environment
+    Value: !GetAtt Environment.EndpointURL
