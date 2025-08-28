@@ -1,5 +1,6 @@
 package org.gft.gbt.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -15,21 +16,39 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 public class SecurityConfig {
 
+    @Value("${app.security.client.username}")
+    private String clientUsername;
+
+    @Value("${app.security.client.password}")
+    private String clientPassword;
+
+    @Value("${app.security.admin.username}")
+    private String adminUsername;
+
+    @Value("${app.security.admin.password}")
+    private String adminPassword;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .anyRequest().hasAnyRole("ADMIN", "CLIENT"))
                 .httpBasic(Customizer.withDefaults());
         return http.build();
     }
 
     @Bean
     public UserDetailsService users(PasswordEncoder encoder) {
-        UserDetails user = User.withUsername("client")
-                .password(encoder.encode("password"))
+        UserDetails client = User.withUsername(clientUsername)
+                .password(encoder.encode(clientPassword))
                 .roles("CLIENT")
                 .build();
-        return new InMemoryUserDetailsManager(user);
+        UserDetails admin = User.withUsername(adminUsername)
+                .password(encoder.encode(adminPassword))
+                .roles("ADMIN")
+                .build();
+        return new InMemoryUserDetailsManager(client, admin);
     }
 
     @Bean

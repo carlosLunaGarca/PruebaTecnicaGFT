@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy GBT Spring Boot application on Elastic Beanstalk
+
+Parameters:
+  ApplicationName:
+    Type: String
+    Default: gbt-app
+  EnvironmentName:
+    Type: String
+    Default: gbt-env
+  MongoDbUri:
+    Type: String
+    Description: MongoDB connection URI
+  ClientUsername:
+    Type: String
+    Default: client
+  ClientPassword:
+    Type: String
+    Default: password
+  AdminUsername:
+    Type: String
+    Default: admin
+  AdminPassword:
+    Type: String
+    Default: admin
+  S3Bucket:
+    Type: String
+    Description: S3 bucket containing application jar
+  S3Key:
+    Type: String
+    Description: S3 key for application jar
+
+Resources:
+  Application:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Ref ApplicationName
+
+  ApplicationVersion:
+    Type: AWS::ElasticBeanstalk::ApplicationVersion
+    Properties:
+      ApplicationName: !Ref ApplicationName
+      SourceBundle:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+
+  Environment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !Ref ApplicationName
+      EnvironmentName: !Ref EnvironmentName
+      SolutionStackName: "64bit Amazon Linux 2023 v4.3.3 running Corretto 17"
+      VersionLabel: !Ref ApplicationVersion
+      OptionSettings:
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: MONGODB_URI
+          Value: !Ref MongoDbUri
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SECURITY_CLIENT_USERNAME
+          Value: !Ref ClientUsername
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SECURITY_CLIENT_PASSWORD
+          Value: !Ref ClientPassword
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SECURITY_ADMIN_USERNAME
+          Value: !Ref AdminUsername
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: SECURITY_ADMIN_PASSWORD
+          Value: !Ref AdminPassword
+
+Outputs:
+  ApplicationUrl:
+    Description: URL of the Elastic Beanstalk environment
+    Value: !GetAtt Environment.EndpointURL
