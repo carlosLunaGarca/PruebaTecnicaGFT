@@ -32,8 +32,23 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        // Public endpoints
+                        .requestMatchers("/api/funds").permitAll()
+                        .requestMatchers("/api/v1/**").permitAll()
+                        
+                        // Admin endpoints
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .anyRequest().hasAnyRole("ADMIN", "CLIENT"))
+                        
+                        // Customer-specific endpoints - using hasAnyRole for simplicity
+                        .requestMatchers("/api/customers/{customerId}/**")
+                            .hasAnyRole("ADMIN", "CLIENT")
+                        
+                        // All other API endpoints require authentication
+                        .requestMatchers("/api/**").authenticated()
+                        
+                        // Any other request
+                        .anyRequest().authenticated()
+                )
                 .httpBasic(Customizer.withDefaults());
         return http.build();
     }
