@@ -39,6 +39,11 @@ public class InvestmentService {
         Fund fund = fundRepository.findById(fundId)
                 .orElseThrow(() -> new FundNotFoundException("Fund not found"));
 
+        // Validación para suscripción duplicada
+        if (customer.getSubscriptions().contains(fundId)) {
+            throw new RuntimeException("Customer is already subscribed to this fund");
+        }
+
         BigDecimal min = fund.getMinimumAmount();
         if (customer.getBalance().compareTo(min) < 0) {
             throw new InsufficientBalanceException(

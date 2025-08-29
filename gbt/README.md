@@ -1,4 +1,91 @@
-# GBT - Gestión de Fondos de Inversión
+# 🏦 GBT - Gestión de Fondos de Inversión
+
+[![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.3-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![MongoDB](https://img.shields.io/badge/MongoDB-7.0-green.svg)](https://www.mongodb.com/)
+[![Docker](https://img.shields.io/badge/Docker-20.10+-blue.svg)](https://www.docker.com/)
+[![AWS](https://img.shields.io/badge/AWS-CloudFormation-orange.svg)](https://aws.amazon.com/cloudformation/)
+
+Aplicación backend robusta para la gestión de fondos de inversión, desarrollada con **Spring Boot 3.x**, **MongoDB** y **Spring Security**. Diseñada para despliegue en contenedores Docker y AWS.
+
+## 📋 Tabla de Contenidos
+
+- [🚀 Características Principales](#-características-principales)
+- [🛠️ Tecnologías](#️-tecnologías)
+- [📦 Requisitos Previos](#-requisitos-previos)
+- [⚡ Inicio Rápido](#-inicio-rápido)
+- [🏗️ Arquitectura](#️-arquitectura)
+- [🔐 Autenticación y Autorización](#-autenticación-y-autorización)
+- [📚 Documentación API](#-documentación-api)
+- [🧪 Testing](#-testing)
+- [🐳 Docker](#-docker)
+- [☁️ Despliegue en AWS](#️-despliegue-en-aws)
+- [🔧 Configuración](#-configuración)
+- [🚨 Troubleshooting](#-troubleshooting)
+- [🤝 Contribución](#-contribución)
+
+## 🚀 Características Principales
+
+### 🏦 Gestión de Fondos
+- ✅ **Catálogo completo** de fondos de inversión disponibles
+- ✅ **Consulta pública** de información de fondos sin autenticación
+- ✅ **Filtrado y búsqueda** avanzada de fondos
+
+### 👥 Gestión de Clientes
+- ✅ **CRUD completo** de clientes con validaciones robustas
+- ✅ **Sistema de balances** con validaciones de saldo
+- ✅ **Preferencias de notificación** (EMAIL/SMS)
+- ✅ **Gestión de suscripciones** a fondos
+
+### 🔐 Seguridad
+- ✅ **Autenticación Basic Auth** con roles diferenciados
+- ✅ **Autorización basada en roles** (ADMIN/CLIENT)
+- ✅ **Validación de entrada** exhaustiva
+- ✅ **Manejo centralizado de excepciones**
+
+### 📊 Transacciones
+- ✅ **Suscripción a fondos** con validación de saldo mínimo
+- ✅ **Cancelación de suscripciones** con reembolso automático
+- ✅ **Historial completo** de transacciones por cliente
+- ✅ **Sistema de notificaciones** configurables
+
+### 🔧 Operaciones
+- ✅ **Health checks** integrados
+- ✅ **Logging estructurado** con diferentes niveles
+- ✅ **Métricas y monitoreo** con Actuator
+- ✅ **Documentación OpenAPI** interactiva
+
+## 🛠️ Tecnologías
+
+### Backend
+- **☕ Java 17** - LTS version
+- **🚀 Spring Boot 3.3.3** - Framework principal
+- **🔒 Spring Security 6** - Autenticación y autorización
+- **📊 Spring Data MongoDB** - Acceso a datos
+- **🔍 Spring Boot Actuator** - Monitoreo y métricas
+
+### Base de Datos
+- **🍃 MongoDB 7.0** - Base de datos NoSQL
+- **🗂️ MongoDB Reactive** - Soporte reactivo opcional
+
+### Documentación
+- **📖 SpringDoc OpenAPI 3** - Documentación API automática
+- **🎯 Swagger UI** - Interfaz interactiva de API
+
+### Testing
+- **✅ JUnit 5** - Framework de testing
+- **🎭 Mockito** - Mocking framework
+- **🧪 TestContainers** - Testing de integración
+
+### DevOps
+- **🐳 Docker & Docker Compose** - Contenedorización
+- **☁️ AWS CloudFormation** - Infrastructure as Code
+- **📦 Amazon ECS** - Orquestación de contenedores
+- **🔍 Amazon ECR** - Registry de imágenes
+
+## 📦 Requisitos Previos
+
+### Desarrollo Local
 
 Aplicación backend para la gestión de fondos de inversión, desarrollada con Spring Boot 3.x, MongoDB y Spring Security.
 
