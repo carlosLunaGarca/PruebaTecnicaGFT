@@ -174,6 +174,78 @@ Resources:
         ScanOnPush: true
       ImageTagMutability: IMMUTABLE
 
+  # Application Load Balancer
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets: !Ref SubnetIds
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the Application Load Balancer
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref VpcId
+      HealthCheckPath: /actuator/health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200-399'
+
+  # Update ECS Service to use Load Balancer
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: LoadBalancerListener
+    Properties:
+      ServiceName: !Sub ${AppName}-${EnvironmentName}-service
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: !Ref DesiredCount
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref ContainerSecurityGroup
+          Subnets: !Ref SubnetIds
+      LoadBalancers:
+        - ContainerName: !Sub ${AppName}-${EnvironmentName}-container
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref TargetGroup
+      TaskDefinition: !Ref TaskDefinition
+
   # Outputs
   ServiceURL:
     Description: URL of the service
@@ -186,29 +258,3 @@ Resources:
   TaskDefinitionARN:
     Description: ECS Task Definition ARN
     Value: !Ref TaskDefinition
-    Properties:
-      ApplicationName: !Ref ApplicationName
-      EnvironmentName: !Ref EnvironmentName
-      SolutionStackName: "64bit Amazon Linux 2023 v4.3.3 running Corretto 17"
-      VersionLabel: !Ref ApplicationVersion
-      OptionSettings:
-        - Namespace: aws:elasticbeanstalk:application:environment
-          OptionName: MONGODB_URI
-          Value: !Ref MongoDbUri
-        - Namespace: aws:elasticbeanstalk:application:environment
-          OptionName: SECURITY_CLIENT_USERNAME
-          Value: !Ref ClientUsername
-        - Namespace: aws:elasticbeanstalk:application:environment
-          OptionName: SECURITY_CLIENT_PASSWORD
-          Value: !Ref ClientPassword
-        - Namespace: aws:elasticbeanstalk:application:environment
-          OptionName: SECURITY_ADMIN_USERNAME
-          Value: !Ref AdminUsername
-        - Namespace: aws:elasticbeanstalk:application:environment
-          OptionName: SECURITY_ADMIN_PASSWORD
-          Value: !Ref AdminPassword
-
-Outputs:
-  ApplicationUrl:
-    Description: URL of the Elastic Beanstalk environment
-    Value: !GetAtt Environment.EndpointURL

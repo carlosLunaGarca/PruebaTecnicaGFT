@@ -1,114 +1,149 @@
-# GBT Application Deployment Guide
+# Guía de Despliegue de la Aplicación GBT
 
-This guide explains how to deploy the GBT application both locally using Docker Compose and to AWS using CloudFormation.
+Esta guía explica cómo desplegar la aplicación GBT tanto localmente usando Docker Compose como en AWS usando CloudFormation.
 
-## Table of Contents
-1. [Local Development with Docker Compose](#local-development-with-docker-compose)
-2. [AWS Deployment with CloudFormation](#aws-deployment-with-cloudformation)
+## Tabla de Contenidos
+1. [Desarrollo Local con Docker Compose](#desarrollo-local-con-docker-compose)
+2. [Despliegue en AWS con CloudFormation](#despliegue-en-aws-con-cloudformation)
+3. [Mejores Prácticas de Seguridad](#mejores-prácticas-de-seguridad)
+4. [Solución de Problemas](#solución-de-problemas)
+5. [Limpieza](#limpieza)
 
-## Local Development with Docker Compose
+## Desarrollo Local con Docker Compose
 
-### Prerequisites
+### Requisitos Previos
 
-- Docker and Docker Compose installed
-- Java 17 or higher (for local development without Docker)
-- Gradle (for local development without Docker)
+- Docker y Docker Compose instalados
+- Java 17 o superior
+- Gradle 7.0+
 
-### Quick Start
+### Inicio Rápido
 
-1. Clone the repository:
+1. Clonar el repositorio:
    ```bash
-   git clone <repository-url>
-   cd gbt
+   git clone https://github.com/carlosLunaGarca/PruebaTecnicaGFT.git
+   cd PruebaTecnicaGFT/gbt
    ```
 
-2. Start the application with Docker Compose:
+2. Crear un archivo `.env` con tu configuración:
+   ```bash
+   cp .env.example .env
+   # Editar el archivo .env con tus preferencias
+   ```
+
+3. Iniciar la aplicación con Docker Compose:
    ```bash
    docker-compose up -d
    ```
 
-3. Wait for all services to start (this might take a few minutes on first run)
+4. Esperar a que todos los servicios se inicien (puede tardar unos minutos en la primera ejecución)
 
-4. Access the application:
+5. Acceder a la aplicación:
    - API: http://localhost:8080/api/funds
-   - MongoDB Express (Admin UI): http://localhost:8081
+   - Interfaz Swagger: http://localhost:8080/swagger-ui.html
+   - MongoDB Express (Interfaz de administración): http://localhost:8081
 
-### Services
+### Servicios
 
-- **gbt-application**: Spring Boot application (port 8080)
-- **mongo**: MongoDB database (port 27017)
-- **mongo-express**: Web-based MongoDB admin UI (port 8081)
+- **gbt-application**: Aplicación Spring Boot (puerto 8080)
+- **mongo**: Base de datos MongoDB (puerto 27017)
+- **mongo-express**: Interfaz web de administración de MongoDB (puerto 8081)
 
-### Environment Variables
+### Variables de Entorno
 
-The following environment variables can be configured in the `docker-compose.yml` file:
+Crear un archivo `.env` con las siguientes variables:
 
-- `SPRING_DATA_MONGODB_URI`: MongoDB connection string
-- `APP_SECURITY_CLIENT_USERNAME`: Client username (default: client)
-- `APP_SECURITY_CLIENT_PASSWORD`: Client password (default: client123)
-- `APP_SECURITY_ADMIN_USERNAME`: Admin username (default: admin)
-- `APP_SECURITY_ADMIN_PASSWORD`: Admin password (default: admin123)
+```env
+# Configuración de MongoDB
+SPRING_DATA_MONGODB_URI=mongodb://admin:admin123@mongodb:27017/gbt?authSource=admin
 
-### Running Tests
+# Configuración de Seguridad
+APP_SECURITY_CLIENT_USERNAME=client
+APP_SECURITY_CLIENT_PASSWORD=client123
+APP_SECURITY_ADMIN_USERNAME=admin
+APP_SECURITY_ADMIN_PASSWORD=admin123
 
-To run tests locally:
+# Configuración del Servidor
+SERVER_PORT=8080
+```
+
+### Ejecución de Pruebas
+
+Para ejecutar pruebas localmente:
 
 ```bash
 ./gradlew test
 ```
 
-### Stopping the Application
+### Detener la Aplicación
 
 ```bash
 docker-compose down
 ```
 
-To remove volumes (including database data):
+Para eliminar volúmenes (incluyendo datos de la base de datos):
 
 ```bash
 docker-compose down -v
 ```
 
-## AWS Deployment with CloudFormation
+## Despliegue en AWS con CloudFormation
 
-### Prerequisites
+### Requisitos Previos
 
-1. AWS CLI configured with appropriate permissions
-2. Docker installed and running
-3. AWS ECR repository for the application
-4. MongoDB Atlas cluster (or self-hosted MongoDB)
-5. VPC with at least 2 public subnets
+1. Cuenta de AWS con los permisos apropiados
+2. AWS CLI configurado con credenciales
+3. Docker instalado y en ejecución
+4. Clúster de MongoDB Atlas o MongoDB auto-alojado
+5. VPC con al menos 2 subredes públicas en diferentes zonas de disponibilidad (AZs)
+6. Repositorio ECR para las imágenes de contenedores
 
-## Deployment Steps
+### Permisos IAM Requeridos
 
-### 1. Package the Application
+El usuario/rol de IAM que realice el despliegue debe tener permisos para:
+- CloudFormation
+- ECS
+- ECR
+- IAM (para la creación de roles)
+- VPC (para redes)
+- CloudWatch Logs
 
-First, build the application JAR:
+### Pasos para el Despliegue
+
+#### 1. Empaquetar la Aplicación
+
+Construir el archivo JAR de la aplicación:
 
 ```bash
 ./gradlew clean build
 ```
 
-### 2. Build and Push Docker Image
+#### 2. Construir y Subir la Imagen de Docker
 
-1. Authenticate Docker to your ECR registry:
+1. Autenticar Docker en tu registro ECR:
    ```bash
-   aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<region>.amazonaws.com
+   aws ecr get-login-password --region <región> | \
+   docker login --username AWS --password-stdin <id-cuenta>.dkr.ecr.<región>.amazonaws.com
    ```
 
-2. Build the Docker image:
+2. Construir la imagen de Docker:
    ```bash
-   docker build -t <account-id>.dkr.ecr.<region>.amazonaws.com/gbt-application:latest .
+   docker build -t <id-cuenta>.dkr.ecr.<región>.amazonaws.com/gbt-application:latest .
    ```
 
-3. Push the image to ECR:
+3. Crear el repositorio ECR (si no existe):
    ```bash
-   docker push <account-id>.dkr.ecr.<region>.amazonaws.com/gbt-application:latest
+   aws ecr create-repository --repository-name gbt-application
    ```
 
-### 3. Deploy with CloudFormation
+4. Subir la imagen a ECR:
+   ```bash
+   docker push <id-cuenta>.dkr.ecr.<región>.amazonaws.com/gbt-application:latest
+   ```
 
-1. Create a CloudFormation stack using the template:
+#### 3. Desplegar con CloudFormation
+
+1. Crear una pila de CloudFormación usando la plantilla:
    ```bash
    aws cloudformation create-stack \
      --stack-name gbt-application-stack \
@@ -116,70 +151,135 @@ First, build the application JAR:
      --parameters \
          ParameterKey=EnvironmentName,ParameterValue=prod \
          ParameterKey=VpcId,ParameterValue=vpc-xxxxxxxx \
-         ParameterKey=SubnetIds,ParameterValue=subnet-xxxxxxx\,subnet-xxxxxxx \
-         ParameterKey=MongoDBUri,ParameterValue=your-mongodb-uri \
-     --capabilities CAPABILITY_NAMED_IAM
+         ParameterKey=SubnetIds,ParameterValue="subnet-xxxxxxxx,subnet-yyyyyyyy" \
+         ParameterKey=MongoDBUri,ParameterValue="mongodb+srv://<usuario>:<contraseña>@cluster0.xxxxx.mongodb.net/gbt?retryWrites=true&w=majority" \
+         ParameterKey=ContainerCpu,ParameterValue=1024 \
+         ParameterKey=ContainerMemory,ParameterValue=2048 \
+     --capabilities CAPABILITY_NAMED_IAM \
+     --region <tu-región>
    ```
 
-2. Monitor the stack creation:
+2. Monitorear la creación de la pila:
    ```bash
-   aws cloudformation describe-stacks --stack-name gbt-application-stack --query 'Stacks[0].StackStatus'
+   aws cloudformation describe-stacks \
+     --stack-name gbt-application-stack \
+     --query 'Stacks[0].StackStatus' \
+     --output text
    ```
 
-### 4. Verify Deployment
+#### 4. Verificar el Despliegue
 
-1. Get the service URL:
+1. Obtener la URL del servicio:
    ```bash
-   aws cloudformation describe-stacks --stack-name gbt-application-stack --query 'Stacks[0].Outputs[?OutputKey==`ServiceURL`].OutputValue' --output text
+   aws cloudformation describe-stacks \
+     --stack-name gbt-application-stack \
+     --query 'Stacks[0].Outputs[?OutputKey==`ServiceURL`].OutputValue' \
+     --output text
    ```
 
-2. Test the API endpoints:
+2. Probar los endpoints de la API:
    ```bash
-   curl <service-url>/api/funds
+   curl $(aws cloudformation describe-stacks \
+     --stack-name gbt-application-stack \
+     --query 'Stacks[0].Outputs[?OutputKey==`ServiceURL`].OutputValue' \
+     --output text)/api/funds
    ```
 
-## Configuration
+## Mejores Prácticas de Seguridad
 
-The following environment variables can be configured:
+### 1. Gestión de Secretos
+- Usar AWS Secrets Manager o Parameter Store para datos sensibles
+- Nunca comprometer secretos en el control de versiones
+- Rotar credenciales regularmente
 
-- `SPRING_DATA_MONGODB_URI`: MongoDB connection string
-- `APP_SECURITY_CLIENT_USERNAME`: Client username (default: client)
-- `APP_SECURITY_CLIENT_PASSWORD`: Client password (default: client123)
-- `APP_SECURITY_ADMIN_USERNAME`: Admin username (default: admin)
-- `APP_SECURITY_ADMIN_PASSWORD`: Admin password (default: admin123)
+### 2. Seguridad de Red
+- Usar subredes privadas para tareas ECS
+- Configurar grupos de seguridad con el principio de mínimo privilegio
+- Habilitar VPC Flow Logs
+- Considerar usar AWS WAF para protección adicional
 
-## Updating the Application
+### 3. Mejores Prácticas de IAM
+- Seguir el principio de mínimo privilegio
+- Usar roles de IAM en lugar de claves de acceso cuando sea posible
+- Habilitar MFA para usuarios privilegiados
 
-1. Build and push a new Docker image with a new tag
-2. Update the CloudFormation stack with the new image tag
+### 4. Monitoreo y Registros
+- Habilitar CloudWatch Container Insights
+- Configurar alertas de CloudWatch
+- Configurar políticas de retención de registros
 
-## Cleanup
+## Actualización de la Aplicación
 
-To delete all resources:
+1. Construir y subir una nueva imagen de Docker:
+   ```bash
+   docker build -t <id-cuenta>.dkr.ecr.<región>.amazonaws.com/gbt-application:latest .
+   docker push <id-cuenta>.dkr.ecr.<región>.amazonaws.com/gbt-application:latest
+   ```
 
-```bash
-aws cloudformation delete-stack --stack-name gbt-application-stack
-```
-## Security Considerations
+2. Actualizar el servicio ECS para usar la nueva imagen:
+   ```bash
+   aws ecs update-service \
+     --cluster gbt-application-prod-cluster \
+     --service gbt-application-prod-service \
+     --force-new-deployment \
+     --region <tu-región>
+   ```
 
-- Always use HTTPS in production
-- Rotate database credentials regularly
-- Restrict IAM permissions following the principle of least privilege
-- Enable VPC flow logs for monitoring network traffic
-- Use AWS Secrets Manager for sensitive configuration
+## Limpieza
 
-## Troubleshooting
+Para eliminar todos los recursos y evitar cargos adicionales:
 
-Check CloudWatch Logs for application logs:
+1. Eliminar la pila de CloudFormation:
+   ```bash
+   aws cloudformation delete-stack --stack-name gbt-application-stack --region <tu-región>
+   ```
 
-```bash
-aws logs describe-log-groups --query 'logGroups[?contains(logGroupName,`gbt-application`)].logGroupName' --output text | xargs -I {} aws logs tail {}
-```
+2. Eliminar el repositorio ECR (opcional):
+   ```bash
+   aws ecr delete-repository \
+     --repository-name gbt-application \
+     --force \
+     --region <tu-región>
+   ```
 
-For ECS service events:
+## Solución de Problemas
 
+### Verificar Estado del Servicio ECS
 ```bash
 aws ecs describe-services \
   --cluster gbt-application-prod-cluster \
   --services gbt-application-prod-service \
-  --query 'services[0].events[0:10]'
+  --query 'services[0]' \
+  --region <tu-región>
+```
+
+### Ver Registros de CloudWatch
+```bash
+GRUPO_REGISTRO=$(aws ecs describe-services \
+  --cluster gbt-application-prod-cluster \
+  --services gbt-application-prod-service \
+  --query 'services[0].deployments[0].taskDefinition' \
+  --output text \
+  --region <tu-región> \
+  | cut -d'/' -f2)
+
+aws logs tail /ecs/$GRUPO_REGISTRO \
+  --follow \
+  --region <tu-región>
+```
+
+### Verificar Estado del Balanceador de Carga
+```bash
+aws elbv2 describe-load-balancers \
+  --names gbt-application-lb \
+  --query 'LoadBalancers[0].DNSName' \
+  --region <tu-región>
+```
+
+### Problemas Comunes
+1. **Error al Iniciar la Tarea**: Verificar registros de la tarea ECS en CloudWatch
+2. **Tiempos de Espera de Conexión**: Verificar grupos de seguridad y ACLs de red
+3. **Fallos en las Comprobaciones de Salud**: Asegurarse de que la ruta de comprobación de salud es correcta
+4. **Problemas de Permisos**: Verificar roles y políticas de IAM
+
+Para obtener ayuda adicional, consulta la [Documentación de AWS ECS](https://docs.aws.amazon.com/ecs/index.html).

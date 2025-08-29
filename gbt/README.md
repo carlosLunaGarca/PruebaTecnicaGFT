@@ -1,33 +1,34 @@
-# GBT - Gestión de Inversiones
+# GBT - Gestión de Fondos de Inversión
 
-Aplicación backend para la gestión de inversiones, desarrollada con Spring Boot y MongoDB.
+Aplicación backend para la gestión de fondos de inversión, desarrollada con Spring Boot 3.x, MongoDB y Spring Security.
 
-## Características Principales
+## 🚀 Características Principales
 
-- Gestión de clientes y sus inversiones
 - Catálogo de fondos de inversión
-- Sistema de autenticación y autorización
-- API RESTful
+- Sistema de autenticación con roles (ADMIN y CLIENTE)
+- API RESTful documentada con OpenAPI/Swagger
 - Despliegue en contenedores con Docker
 - Integración con MongoDB
+- Configuración para despliegue en AWS con CloudFormation
 
-## Requisitos Previos
+## 🛠️ Requisitos Previos
 
 - Java 17 o superior
 - Docker y Docker Compose
-- MongoDB (puede ser local o en la nube)
+- MongoDB (se incluye configuración para MongoDB en Docker)
 - Gradle 7.0+
 
-## Tecnologías Utilizadas
+## 🛠️ Tecnologías Utilizadas
 
-- **Backend**: Spring Boot 3.x
+- **Backend**: Spring Boot 3.3.3
 - **Base de datos**: MongoDB
-- **Autenticación**: Spring Security
+- **Seguridad**: Spring Security con autenticación básica
+- **Documentación**: SpringDoc OpenAPI 3.0
 - **Contenedorización**: Docker
 - **Orquestación**: Docker Compose
 - **Despliegue**: AWS CloudFormation
 
-## Estructura del Proyecto
+## 🏗️ Estructura del Proyecto
 
 ```
 gbt/
@@ -36,20 +37,26 @@ gbt/
 │   │   ├── java/org/gft/gbt/
 │   │   │   ├── config/         # Configuraciones de Spring
 │   │   │   ├── controller/     # Controladores REST
+│   │   │   ├── exception/      # Manejo de excepciones
+│   │   │   ├── handler/        # Manejadores de excepciones
 │   │   │   ├── model/          # Entidades del dominio
 │   │   │   ├── repository/     # Repositorios de datos
-│   │   │   └── security/       # Configuración de seguridad
+│   │   │   ├── security/       # Configuración de seguridad
+│   │   │   └── service/        # Lógica de negocio
 │   │   └── resources/          # Archivos de configuración
 │   └── test/                   # Pruebas unitarias y de integración
 ├── cloudformation/             # Plantillas de CloudFormation
-├── init/                       # Scripts de inicialización de MongoDB
+├── docker/                     # Configuración de Docker
+├── gradle/                     # Configuración de Gradle Wrapper
+├── .gitignore                  # Archivos ignorados por Git
+├── build.gradle                # Configuración de dependencias
 ├── docker-compose.yml          # Configuración para desarrollo local
 └── README.md                   # Este archivo
 ```
 
-## Configuración Rápida
+## 🚀 Configuración Rápida
 
-### Desarrollo Local
+### Desarrollo Local con Docker
 
 1. Clonar el repositorio:
    ```bash
@@ -57,59 +64,81 @@ gbt/
    cd gbt
    ```
 
-2. Iniciar la aplicación con Docker Compose:
+2. Crear archivo de variables de entorno:
+   ```bash
+   cp .env.example .env
+   ```
+   Edita el archivo `.env` según sea necesario.
+
+3. Iniciar la aplicación con Docker Compose:
    ```bash
    docker-compose up -d
    ```
 
-3. La aplicación estará disponible en: http://localhost:8080
+4. La aplicación estará disponible en: http://localhost:8080
 
-4. MongoDB Express (UI de administración): http://localhost:8081
+5. Documentación de la API (Swagger UI): http://localhost:8080/swagger-ui.html
+
+6. MongoDB Express (UI de administración): http://localhost:8081
 
 ### Variables de Entorno
 
 Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
 
 ```env
-SPRING_DATA_MONGODB_URI=mongodb://admin:admin123@localhost:27017/gbt?authSource=admin
+# MongoDB Configuration
+SPRING_DATA_MONGODB_URI=mongodb://admin:admin123@mongodb:27017/gbt?authSource=admin
+
+# Security Configuration
 APP_SECURITY_CLIENT_USERNAME=client
 APP_SECURITY_CLIENT_PASSWORD=client123
 APP_SECURITY_ADMIN_USERNAME=admin
 APP_SECURITY_ADMIN_PASSWORD=admin123
+
+# Server Configuration
+SERVER_PORT=8080
 ```
 
-## API Endpoints
+## 📚 Documentación de la API
 
-### Autenticación
+La documentación de la API está disponible en formato OpenAPI 3.0 y puede ser accedida a través de:
 
-- `POST /api/auth/login` - Iniciar sesión
-- `POST /api/auth/refresh` - Refrescar token
+- **Swagger UI**: http://localhost:8080/swagger-ui.html
+- **OpenAPI JSON**: http://localhost:8080/v3/api-docs
 
-### Clientes
+### Endpoints Disponibles
 
-- `GET /api/customers` - Listar clientes (ADMIN)
-- `GET /api/customers/{id}` - Obtener cliente por ID
-- `POST /api/customers` - Crear nuevo cliente
-- `PUT /api/customers/{id}` - Actualizar cliente
+#### 🔐 Autenticación
 
-### Fondos
+- `GET /api/v1/auth/login` - Iniciar sesión (Basic Auth)
 
-- `GET /api/funds` - Listar todos los fondos
-- `GET /api/funds/{id}` - Obtener fondo por ID
-- `POST /api/funds` - Crear nuevo fondo (ADMIN)
-- `PUT /api/funds/{id}` - Actualizar fondo (ADMIN)
+#### 📊 Fondos
 
-### Inversiones
+- `GET /api/funds` - Listar todos los fondos (público)
 
-- `GET /api/investments` - Listar inversiones del usuario
-- `POST /api/investments` - Crear nueva inversión
-- `GET /api/investments/{id}` - Obtener inversión por ID
+#### 👥 Clientes
 
-## Despliegue en Producción
+- `GET /api/customers/{customerId}/**` - Acceso a datos de cliente (requiere autenticación)
 
-Consulta el archivo [DEPLOYMENT.md](DEPLOYMENT.md) para instrucciones detalladas sobre cómo desplegar la aplicación en AWS usando CloudFormation.
+#### 🛠️ Administración
 
-## Contribución
+- `GET /api/admin/**` - Endpoints de administración (rol ADMIN requerido)
+
+## 🚀 Despliegue en Producción
+
+Para desplegar la aplicación en AWS usando CloudFormation, consulta el archivo [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## 🧪 Ejecución de Pruebas
+
+Para ejecutar las pruebas unitarias:
+
+```bash
+./gradlew test
+```
+
+## 🤝 Contribución
+
+Las contribuciones son bienvenidas. Por favor sigue estos pasos:
 
 1. Haz un fork del proyecto
 2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
@@ -117,12 +146,12 @@ Consulta el archivo [DEPLOYMENT.md](DEPLOYMENT.md) para instrucciones detalladas
 4. Haz push a la rama (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
 
-## Licencia
+## 📄 Licencia
 
 Distribuido bajo la licencia MIT. Ver `LICENSE` para más información.
 
-## Contacto
+## 📧 Contacto
 
-Equipo de Desarrollo - [contacto@ejemplo.com](mailto:contacto@ejemplo.com)
+Equipo de Desarrollo - [lunaexpres123@gmail.com](mailto:contacto@ejemplo.com)
 
-Enlace del Proyecto: [https://github.com/tu-usuario/gbt](https://github.com/tu-usuario/gbt)
+Enlace del Proyecto: [https://github.com/carlosLunaGarca/PruebaTecnicaGFT/tree/main/gbt](https://github.com/tu-usuario/gbt)
