@@ -107,50 +107,40 @@ Después de que la importación sea exitosa, tu stack estará sincronizado y pod
 
 ## 2. Construcción y Despliegue de la Aplicación
 
-### 2.1 Obtener el URI del Repositorio ECR
+Sigue estos pasos para compilar la aplicación, construir la imagen de Docker, subirla a ECR y desplegarla.
 
-Busca el URI del repositorio ECR creado por CloudFormation.
+### 1. Compila la Aplicación
+
+Desde la raíz del proyecto, ejecuta el siguiente comando para crear el archivo `.jar`:
 
 ```bash
-aws cloudformation describe-stacks \
-  --stack-name gbt-application \
-  --query "Stacks[0].Outputs[?OutputKey=='ECRRepositoryURI'].OutputValue" \
-  --output text
+./gradlew build
 ```
 
-### 2.2 Construir y Publicar la Imagen Docker
+### 2. Construye y Sube la Imagen Docker
 
-1.  **Construir la aplicación:**
-    ```bash
-    ./gradlew clean build
-    ```
-
-2.  **Construir la imagen Docker:**
-    ```bash
-    docker build -t gbt-application:latest .
-    ```
-
-3.  **Autenticar Docker en ECR:**
-    ```bash
-    aws ecr get-login-password --region <tu-región> | docker login --username AWS --password-stdin <uri-del-repositorio-ecr>
-    ```
-
-4.  **Etiquetar y subir la imagen:**
-    ```bash
-    docker tag gbt-application:latest <uri-del-repositorio-ecr>:latest
-    docker push <uri-del-repositorio-ecr>:latest
-    ```
-
-### 2.3 Iniciar el Servicio en ECS
-
-Actualiza el servicio para que ejecute una tarea.
+Reemplaza `<tu-aws-account-id>` con tu ID de cuenta de AWS. Si no lo conoces, puedes obtenerlo con `aws sts get-caller-identity --query Account --output text`.
 
 ```bash
-aws ecs update-service \
-  --cluster gbt-application-prod-cluster \
-  --service gbt-application-prod-service \
-  --desired-count 1 \
-  --region <tu-región>
+# 1. Inicia sesión en ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <tu-aws-account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+# 2. Construye la imagen
+docker build -t gbt-application .
+
+# 3. Etiqueta la imagen para ECR
+docker tag gbt-application:latest <tu-aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/gbt-application:latest
+
+# 4. Sube la imagen a ECR
+docker push <tu-aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/gbt-application:latest
+```
+
+### 3. Fuerza un Nuevo Despliegue (Opcional)
+
+Después de subir una nueva imagen, ECS normalmente desplegará la nueva versión automáticamente. Para forzar el despliegue inmediato, ejecuta:
+
+```bash
+aws ecs update-service --cluster gbt-application-prod-cluster --service gbt-application-prod-service --force-new-deployment --region us-east-1
 ```
 
 ---

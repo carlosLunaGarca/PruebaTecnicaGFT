@@ -33,8 +33,20 @@ WORKDIR /app
 # Copy the JAR file from builder stage
 COPY --from=builder /app/build/libs/*.jar app.jar
 
+# Install curl and download the certificate
+USER root
+RUN apt-get update && \
+    apt-get install -y curl openjdk-17-jre-headless && \
+    mkdir -p /etc/ssl/certs/aws-docdb && \
+    curl -sS "https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem" -o /etc/ssl/certs/aws-docdb/global-bundle.pem && \
+    chmod 644 /etc/ssl/certs/aws-docdb/global-bundle.pem && \
+    keytool -import -noprompt -alias rds-global-bundle -file /etc/ssl/certs/aws-docdb/global-bundle.pem -keystore /etc/ssl/cacerts -storepass changeit && \
+    chmod 644 /etc/ssl/cacerts && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Change ownership to appuser
-RUN chown appuser:appuser app.jar
+RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
@@ -42,12 +54,8 @@ USER appuser
 # Expose application port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:8080/actuator/health || exit 1
-
 # JVM optimization parameters
-ENV JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djavax.net.ssl.trustStore=/etc/ssl/cacerts -Djavax.net.ssl.trustStorePassword=changeit"
 
 # Run the application
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

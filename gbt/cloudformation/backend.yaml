@@ -219,7 +219,13 @@ Resources:
             - Name: SPRING_PROFILES_ACTIVE
               Value: aws
             - Name: SPRING_DATA_MONGODB_URI
-              Value: !Sub 'mongodb://${DBUser}:${DBPassword}@${DocDBCluster.Endpoint}:27017/gbt?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false'
+              Value: !Sub >-
+                mongodb://${DBUser}:${DBPassword}@${DocDBCluster.Endpoint}/gbt?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false
+            - Name: JAVA_OPTS
+              Value: >-
+                -Xmx512m -Xms256m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+                -Djavax.net.ssl.trustStore=/etc/ssl/cacerts
+                -Djavax.net.ssl.trustStorePassword=changeit
           LogConfiguration:
             LogDriver: awslogs
             Options:
