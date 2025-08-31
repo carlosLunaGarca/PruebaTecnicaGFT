@@ -1,5 +1,21 @@
 # Guía de Despliegue de GBT
+# 🚀 Guía de Deployment - GBT Plataforma de Fondos
 
+Esta guía proporciona instrucciones completas para desplegar la plataforma GBT en AWS usando infraestructura como código.
+
+## 📋 Tabla de Contenidos
+
+- [🔧 Prerrequisitos](#-prerrequisitos)
+- [🏗️ Arquitectura de Deployment](#️-arquitectura-de-deployment)
+- [🔐 Configuración de Seguridad](#-configuración-de-seguridad)
+- [🚀 Deployment Automatizado](#-deployment-automatizado)
+- [📊 Monitoreo y Observabilidad](#-monitoreo-y-observabilidad)
+- [🔄 Operaciones Post-Deployment](#-operaciones-post-deployment)
+- [🛠️ Troubleshooting](#️-troubleshooting)
+
+## 🔧 Prerrequisitos
+
+### Herramientas Requeridas
 Esta guía proporciona instrucciones detalladas para desplegar la aplicación GBT en AWS. El proceso se divide en dos fases principales:
 1.  **Despliegue de la infraestructura base** con AWS CloudFormation.
 2.  **Construcción y despliegue de la aplicación** en la infraestructura creada.

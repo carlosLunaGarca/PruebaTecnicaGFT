@@ -22,11 +22,7 @@ Parameters:
     Description: DocumentDB master username
     Default: usermongo
 
-  DBPassword:
-    Type: String
-    Description: DocumentDB master password
-    NoEcho: true
-    MinLength: 8
+  # Removed DBPassword parameter - now generated securely
 
 Resources:
   # ECR Repository
@@ -142,33 +138,56 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-  # Security Group for DocumentDB
-  DocDBSecurityGroup:
+  # Security Group for ECS Tasks
+  ECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AppName}-${EnvironmentName}-docdb-sg'
-      GroupDescription: 'Security group for DocumentDB cluster'
-      VpcId: !Ref DefaultVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 27017
-          ToPort: 27017
-          CidrIp: 0.0.0.0/0
-          Description: 'Allow MongoDB access from anywhere (temporary)'
-
-  # Security Group
-  SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub '${AppName}-${EnvironmentName}-sg'
-      GroupDescription: Security group for GBT application
+      GroupName: !Sub '${AppName}-${EnvironmentName}-ecs-sg'
+      GroupDescription: Security group for ECS tasks
       VpcId: !Ref DefaultVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
           CidrIp: 0.0.0.0/0
-          Description: HTTP access
+          Description: 'HTTP access from internet'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'All outbound traffic'
+
+  # Security Group for DocumentDB (SECURED)
+  DocDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${AppName}-${EnvironmentName}-docdb-sg'
+      GroupDescription: 'Security group for DocumentDB cluster - RESTRICTED ACCESS'
+      VpcId: !Ref DefaultVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          SourceSecurityGroupId: !Ref ECSSecurityGroup
+          Description: 'MongoDB access ONLY from ECS tasks'
+
+  # Application Load Balancer Security Group
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${AppName}-${EnvironmentName}-alb-sg'
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref DefaultVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTP access'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIb: 0.0.0.0/0
+          Description: 'HTTPS access'
 
   # DocumentDB Subnet Group
   DocDBSubnetGroup:
@@ -179,26 +198,136 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
 
-  # DocumentDB Cluster
+  # AWS Secrets Manager for Database Credentials
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AppName}-${EnvironmentName}-db-credentials'
+      Description: 'Database credentials for GBT application'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUser}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+
+  # AWS Secrets Manager for Application Secrets
+  ApplicationSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AppName}-${EnvironmentName}-app-credentials'
+      Description: 'Application credentials for GBT application'
+      SecretString: !Sub |
+        {
+          "client_username": "client",
+          "client_password": "client123",
+          "admin_username": "admin", 
+          "admin_password": "admin123"
+        }
+
+  # DocumentDB Cluster with Secrets Manager Integration
   DocDBCluster:
     Type: AWS::DocDB::DBCluster
     Properties:
       DBClusterIdentifier: !Sub '${AppName}-${EnvironmentName}-cluster'
       MasterUsername: !Ref DBUser
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DocDBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DocDBSecurityGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      StorageEncrypted: true
+      DeletionProtection: true
 
-  # DocumentDB Instance
+  # DocumentDB Instance with Enhanced Configuration
   DocDBInstance:
     Type: AWS::DocDB::DBInstance
     Properties:
       DBInstanceClass: db.t3.medium
       DBClusterIdentifier: !Ref DocDBCluster
       DBInstanceIdentifier: !Sub '${AppName}-${EnvironmentName}-instance'
+      EnablePerformanceInsights: true
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
 
-  # ECS Task Definition
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AppName}-${EnvironmentName}-alb'
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${AppName}-${EnvironmentName}-alb'
+
+  # Target Group for ECS Service
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AppName}-${EnvironmentName}-tg'
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref DefaultVPC
+      TargetType: ip
+      HealthCheckPath: /actuator/health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: '200'
+
+  # ALB Listener
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # IAM Role for ECS Tasks (Enhanced)
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AppName}-${EnvironmentName}-task-role'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SecretsManagerPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+                  - !Ref ApplicationSecret
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${AppName}-${EnvironmentName}*'
+
+  # ECS Task Definition (Enhanced for Production)
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -206,9 +335,10 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: 256
-      Memory: 512
+      Cpu: 1024
+      Memory: 2048
       ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: !Ref ECSTaskRole
       ContainerDefinitions:
         - Name: !Sub '${AppName}-container'
           Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest'
@@ -219,39 +349,218 @@ Resources:
           Environment:
             - Name: SPRING_PROFILES_ACTIVE
               Value: aws
-            - Name: SPRING_DATA_MONGODB_URI
-              Value: !Sub >
-                mongodb://${DBUser}:${DBPassword}@${DocDBCluster.Endpoint}:27017/gbt?replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false&tls=true&tlsInsecure=true
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
             - Name: JAVA_OPTS
               Value: >-
-                -Xmx512m -Xms256m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+                -Xmx1536m -Xms512m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+                -XX:+UseG1GC -XX:G1HeapRegionSize=16m
                 -Djavax.net.ssl.trustStore=/etc/ssl/cacerts
                 -Djavax.net.ssl.trustStorePassword=changeit
+                -Dspring.profiles.active=aws
+          Secrets:
+            - Name: DB_SECRET
+              ValueFrom: !Ref DatabaseSecret
+            - Name: APP_SECRET
+              ValueFrom: !Ref ApplicationSecret
+            - Name: SPRING_DATA_MONGODB_URI
+              ValueFrom: !Sub '${DatabaseSecret}:endpoint'
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost:8080/actuator/health || exit 1
+            Interval: 30
+            Timeout: 10
+            Retries: 3
+            StartPeriod: 60
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref CloudWatchLogsGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
+              awslogs-multiline-pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
 
-  # ECS Service (comenzar con 0 tareas)
+  # ECS Service with Load Balancer Integration
   ECSService:
     Type: AWS::ECS::Service
+    DependsOn: ALBListener
     Properties:
       ServiceName: !Sub '${AppName}-${EnvironmentName}-service'
       Cluster: !Ref ECSCluster
       LaunchType: FARGATE
       TaskDefinition: !Ref TaskDefinition
-      DesiredCount: 0
+      DesiredCount: 2
+      MinHealthyPercent: 50
+      MaximumPercent: 200
+      EnableExecuteCommand: true
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
           SecurityGroups:
-            - !Ref SecurityGroup
-            - !Ref DocDBSecurityGroup
+            - !Ref ECSSecurityGroup
           Subnets:
             - !Ref PublicSubnet1
             - !Ref PublicSubnet2
+      LoadBalancers:
+        - ContainerName: !Sub '${AppName}-container'
+          ContainerPort: 8080
+          TargetGroupArn: !Ref TargetGroup
+      HealthCheckGracePeriodSeconds: 300
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+
+  # Auto Scaling Target
+  ECSServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 10
+      MinCapacity: 2
+      ResourceId: !Sub 'service/${ECSCluster}/${ECSService.Name}'
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  # CPU Scaling Policy
+  ECSServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${AppName}-${EnvironmentName}-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ResourceId: !Ref ECSServiceScalingTarget
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 300
+
+  # Memory Scaling Policy
+  ECSServiceMemoryScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${AppName}-${EnvironmentName}-memory-scaling'
+      PolicyType: TargetTrackingScaling
+      ResourceId: !Ref ECSServiceScalingTarget
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageMemoryUtilization
+        TargetValue: 80.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 300
+
+  # CloudWatch Alarms
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AppName}-${EnvironmentName}-HighCPU'
+      AlarmDescription: 'High CPU utilization for ECS service'
+      MetricName: CPUUtilization
+      Namespace: AWS/ECS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ServiceName
+          Value: !Sub '${AppName}-${EnvironmentName}-service'
+        - Name: ClusterName
+          Value: !Ref ECSCluster
+
+  HighMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AppName}-${EnvironmentName}-HighMemory'
+      AlarmDescription: 'High memory utilization for ECS service'
+      MetricName: MemoryUtilization
+      Namespace: AWS/ECS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ServiceName
+          Value: !Sub '${AppName}-${EnvironmentName}-service'
+        - Name: ClusterName
+          Value: !Ref ECSCluster
+
+  TaskCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AppName}-${EnvironmentName}-LowTaskCount'
+      AlarmDescription: 'Low task count for ECS service'
+      MetricName: RunningTaskCount
+      Namespace: AWS/ECS
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: ServiceName
+          Value: !Sub '${AppName}-${EnvironmentName}-service'
+        - Name: ClusterName
+          Value: !Ref ECSCluster
+
+  # CloudWatch Dashboard
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${AppName}-${EnvironmentName}-monitoring'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/ECS", "CPUUtilization", "ServiceName", "${AppName}-${EnvironmentName}-service", "ClusterName", "${ECSCluster}"],
+                  [".", "MemoryUtilization", ".", ".", ".", "."],
+                  [".", "RunningTaskCount", ".", ".", ".", "."]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ECS Service Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${ApplicationLoadBalancer}"],
+                  [".", "TargetResponseTime", ".", "."],
+                  [".", "HTTPCode_Target_2XX_Count", ".", "."],
+                  [".", "HTTPCode_Target_5XX_Count", ".", "."]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Load Balancer Metrics",
+                "period": 300
+              }
+            }
+          ]
+        }
 
 Outputs:
   ECRRepositoryURI:
@@ -259,6 +568,36 @@ Outputs:
     Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}'
     Export:
       Name: !Sub '${AppName}-${EnvironmentName}-ECRRepositoryURI'
+
+  LoadBalancerURL:
+    Description: Load Balancer URL
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    Export:
+      Name: !Sub '${AppName}-${EnvironmentName}-LoadBalancerURL'
+
+  SwaggerURL:
+    Description: Swagger UI URL
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}/swagger-ui.html'
+    Export:
+      Name: !Sub '${AppName}-${EnvironmentName}-SwaggerURL'
+
+  DatabaseSecretArn:
+    Description: Database Secret ARN
+    Value: !Ref DatabaseSecret
+    Export:
+      Name: !Sub '${AppName}-${EnvironmentName}-DatabaseSecretArn'
+
+  ApplicationSecretArn:
+    Description: Application Secret ARN
+    Value: !Ref ApplicationSecret
+    Export:
+      Name: !Sub '${AppName}-${EnvironmentName}-ApplicationSecretArn'
+
+  MonitoringDashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AppName}-${EnvironmentName}-monitoring'
+    Export:
+      Name: !Sub '${AppName}-${EnvironmentName}-MonitoringDashboardURL'
 
   ECSClusterName:
     Description: ECS Cluster Name

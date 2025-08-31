@@ -1,53 +1,60 @@
-# 🏦 GBT - Gestión de Fondos de Inversión
+# 🏦 GBT - Plataforma de Gestión de Fondos de Inversión BTG Pactual
 
 [![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.3-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![MongoDB](https://img.shields.io/badge/MongoDB-7.0-green.svg)](https://www.mongodb.com/)
 [![Docker](https://img.shields.io/badge/Docker-20.10+-blue.svg)](https://www.docker.com/)
 [![AWS](https://img.shields.io/badge/AWS-CloudFormation-orange.svg)](https://aws.amazon.com/cloudformation/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Aplicación backend robusta para la gestión de fondos de inversión, desarrollada con **Spring Boot 3.x**, **MongoDB** y **Spring Security**. Diseñada para despliegue en contenedores Docker y AWS.
+> **Plataforma backend robusta para la gestión autónoma de fondos de inversión BTG Pactual, permitiendo a los clientes suscribirse, cancelar y gestionar sus inversiones sin necesidad de contactar asesores.**
 
 ## 📋 Tabla de Contenidos
 
-- [🚀 Características Principales](#-características-principales)
-- [🛠️ Tecnologías](#️-tecnologías)
-- [📦 Requisitos Previos](#-requisitos-previos)
-- [⚡ Inicio Rápido](#-inicio-rápido)
-- [🏗️ Arquitectura](#️-arquitectura)
-- [🔐 Autenticación y Autorización](#-autenticación-y-autorización)
+- [🌟 Características Principales](#-características-principales)
+- [🏗️ Arquitectura del Sistema](#️-arquitectura-del-sistema)
+- [🛠️ Stack Tecnológico](#️-stack-tecnológico)
+- [🚀 Inicio Rápido](#-inicio-rápido)
 - [📚 Documentación API](#-documentación-api)
+- [💡 Ejemplos de Uso](#-ejemplos-de-uso)
+- [🔐 Seguridad y Autenticación](#-seguridad-y-autenticación)
 - [🧪 Testing](#-testing)
-- [🐳 Docker](#-docker)
-- [☁️ Despliegue en AWS](#️-despliegue-en-aws)
-- [🔧 Configuración](#-configuración)
-- [🚨 Troubleshooting](#-troubleshooting)
-- [🤝 Contribución](#-contribución)
+- [🐳 Contenedorización](#-contenedorización)
+- [☁️ Despliegue AWS](#️-despliegue-aws)
+- [⚙️ Configuración](#️-configuración)
+- [🚨 Resolución de Problemas](#-resolución-de-problemas)
 
-## 🚀 Características Principales
+## 🌟 Características Principales
 
-### 🏦 Gestión de Fondos
-- ✅ **Catálogo completo** de fondos de inversión disponibles
-- ✅ **Consulta pública** de información de fondos sin autenticación
-- ✅ **Filtrado y búsqueda** avanzada de fondos
+### 💰 Gestión de Fondos de Inversión
+- ✅ **Catálogo de 5 fondos BTG Pactual** preconfigurados con montos mínimos específicos
+- ✅ **Consulta pública** de información de fondos sin autenticación requerida
+- ✅ **Filtrado por categoría** (FPV, FIC) y monto mínimo de inversión
+- ✅ **Información detallada** de cada fondo con características específicas
 
-### 👥 Gestión de Clientes
-- ✅ **CRUD completo** de clientes con validaciones robustas
-- ✅ **Sistema de balances** con validaciones de saldo
-- ✅ **Preferencias de notificación** (EMAIL/SMS)
-- ✅ **Gestión de suscripciones** a fondos
+### 👥 Sistema de Clientes
+- ✅ **Balance inicial** de COP $500.000 por cliente
+- ✅ **Preferencias de notificación** configurables (EMAIL/SMS)
+- ✅ **Gestión de suscripciones** activas por cliente
+- ✅ **Historial completo** de todas las transacciones
 
-### 🔐 Seguridad
-- ✅ **Autenticación Basic Auth** con roles diferenciados
+### 🔄 Operaciones de Inversión
+- ✅ **Suscripción a fondos** con validación automática de saldo suficiente
+- ✅ **Cancelación de suscripciones** con reembolso instantáneo al balance
+- ✅ **Validación de montos mínimos** según el fondo seleccionado
+- ✅ **Identificadores únicos** para cada transacción
+
+### 📬 Sistema de Notificaciones
+- ✅ **Notificaciones automáticas** al suscribirse a fondos
+- ✅ **Múltiples canales** (Email y SMS) según preferencia del cliente
+- ✅ **Factory pattern** para extensibilidad de nuevos canales
+- ✅ **Configuración por cliente** de preferencias de comunicación
+
+### 🔐 Seguridad Empresarial
+- ✅ **Autenticación Basic Auth** con credenciales seguras
 - ✅ **Autorización basada en roles** (ADMIN/CLIENT)
-- ✅ **Validación de entrada** exhaustiva
-- ✅ **Manejo centralizado de excepciones**
-
-### 📊 Transacciones
-- ✅ **Suscripción a fondos** con validación de saldo mínimo
-- ✅ **Cancelación de suscripciones** con reembolso automático
-- ✅ **Historial completo** de transacciones por cliente
-- ✅ **Sistema de notificaciones** configurables
+- ✅ **Endpoints protegidos** según el rol del usuario
+- ✅ **Validación exhaustiva** de entrada en todos los endpoints
 
 ### 🔧 Operaciones
 - ✅ **Health checks** integrados
