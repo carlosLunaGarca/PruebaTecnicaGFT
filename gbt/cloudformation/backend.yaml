@@ -153,7 +153,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 27017
           ToPort: 27017
-          SourceSecurityGroupId: !Ref SecurityGroup
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow MongoDB access from anywhere (temporary)'
 
   # Security Group
   SecurityGroup:
@@ -219,8 +220,8 @@ Resources:
             - Name: SPRING_PROFILES_ACTIVE
               Value: aws
             - Name: SPRING_DATA_MONGODB_URI
-              Value: !Sub >-
-                mongodb://${DBUser}:${DBPassword}@${DocDBCluster.Endpoint}/gbt?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false
+              Value: !Sub >
+                mongodb://${DBUser}:${DBPassword}@${DocDBCluster.Endpoint}:27017/gbt?replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false&tls=true&tlsInsecure=true
             - Name: JAVA_OPTS
               Value: >-
                 -Xmx512m -Xms256m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
@@ -247,6 +248,7 @@ Resources:
           AssignPublicIp: ENABLED
           SecurityGroups:
             - !Ref SecurityGroup
+            - !Ref DocDBSecurityGroup
           Subnets:
             - !Ref PublicSubnet1
             - !Ref PublicSubnet2

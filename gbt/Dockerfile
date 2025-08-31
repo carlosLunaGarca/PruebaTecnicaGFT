@@ -33,17 +33,23 @@ WORKDIR /app
 # Copy the JAR file from builder stage
 COPY --from=builder /app/build/libs/*.jar app.jar
 
-# Install curl and download the certificate
+# Install required packages and configure SSL
 USER root
 RUN apt-get update && \
-    apt-get install -y curl openjdk-17-jre-headless && \
+    apt-get install -y curl openjdk-17-jre-headless ca-certificates && \
     mkdir -p /etc/ssl/certs/aws-docdb && \
     curl -sS "https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem" -o /etc/ssl/certs/aws-docdb/global-bundle.pem && \
     chmod 644 /etc/ssl/certs/aws-docdb/global-bundle.pem && \
+    # Update Java keystore
     keytool -import -noprompt -alias rds-global-bundle -file /etc/ssl/certs/aws-docdb/global-bundle.pem -keystore /etc/ssl/cacerts -storepass changeit && \
-    chmod 644 /etc/ssl/cacerts && \
+    # Update system certificates
+    update-ca-certificates && \
+    # Clean up
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    # Set correct permissions
+    chmod 644 /etc/ssl/certs/ca-certificates.crt && \
+    chmod 644 /etc/ssl/cacerts
 
 # Change ownership to appuser
 RUN chown -R appuser:appuser /app
