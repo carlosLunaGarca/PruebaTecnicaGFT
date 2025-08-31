@@ -1,4 +1,3 @@
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'GBT Application - Simple Interview Demo'
 
@@ -18,12 +17,23 @@ Parameters:
     Description: MongoDB connection string
     Default: 'mongodb+srv://demo:demo123@cluster0.mongodb.net/gbt?retryWrites=true&w=majority'
 
+  DBUser:
+    Type: String
+    Description: DocumentDB master username
+    Default: usermongo
+
+  DBPassword:
+    Type: String
+    Description: DocumentDB master password
+    NoEcho: true
+    MinLength: 8
+
 Resources:
   # ECR Repository
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Sub '${AppName}-${EnvironmentName}'
+      RepositoryName: !Ref AppName
       ImageScanningConfiguration:
         ScanOnPush: false
       ImageTagMutability: MUTABLE
@@ -132,6 +142,19 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
+  # Security Group for DocumentDB
+  DocDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${AppName}-${EnvironmentName}-docdb-sg'
+      GroupDescription: 'Security group for DocumentDB cluster'
+      VpcId: !Ref DefaultVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          SourceSecurityGroupId: !Ref SecurityGroup
+
   # Security Group
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -145,6 +168,34 @@ Resources:
           ToPort: 8080
           CidrIp: 0.0.0.0/0
           Description: HTTP access
+
+  # DocumentDB Subnet Group
+  DocDBSubnetGroup:
+    Type: AWS::DocDB::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for DocumentDB'
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  # DocumentDB Cluster
+  DocDBCluster:
+    Type: AWS::DocDB::DBCluster
+    Properties:
+      DBClusterIdentifier: !Sub '${AppName}-${EnvironmentName}-cluster'
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DocDBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DocDBSecurityGroup
+
+  # DocumentDB Instance
+  DocDBInstance:
+    Type: AWS::DocDB::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.medium
+      DBClusterIdentifier: !Ref DocDBCluster
+      DBInstanceIdentifier: !Sub '${AppName}-${EnvironmentName}-instance'
 
   # ECS Task Definition
   TaskDefinition:
@@ -168,7 +219,7 @@ Resources:
             - Name: SPRING_PROFILES_ACTIVE
               Value: aws
             - Name: SPRING_DATA_MONGODB_URI
-              Value: !Ref MongoDBUri
+              Value: !Sub 'mongodb://${DBUser}:${DBPassword}@${DocDBCluster.Endpoint}:27017/gbt?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false'
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -218,3 +269,9 @@ Outputs:
     Value: !Ref DefaultVPC
     Export:
       Name: !Sub '${AppName}-${EnvironmentName}-VpcId'
+
+  DocDBEndpoint:
+    Description: DocumentDB Cluster Endpoint
+    Value: !GetAtt DocDBCluster.Endpoint
+    Export:
+      Name: !Sub '${AppName}-${EnvironmentName}-DocDBEndpoint'

@@ -19,7 +19,7 @@ El template `cloudformation/backend.yaml` provisionará la infraestructura neces
 
 ### 1.1 Preparar Parámetros
 
-Crea un archivo `params.json` con el siguiente contenido, reemplazando los valores según tu configuración:
+Crea un archivo `params.json` con el siguiente contenido. **Asegúrate de establecer una contraseña segura para la base de datos.**
 
 ```json
 [
@@ -28,8 +28,12 @@ Crea un archivo `params.json` con el siguiente contenido, reemplazando los valor
     "ParameterValue": "prod"
   },
   {
-    "ParameterKey": "MongoDBUri",
-    "ParameterValue": "mongodb+srv://<usuario>:<contraseña>@cluster.../?retryWrites=true&w=majority"
+    "ParameterKey": "DBUser",
+    "ParameterValue": "usermongo"
+  },
+  {
+    "ParameterKey": "DBPassword",
+    "ParameterValue": "<PON_AQUÍ_UNA_CONTRASEÑA_SEGURA>"
   }
 ]
 ```
@@ -57,6 +61,47 @@ aws cloudformation update-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --region <tu-región>
 ```
+
+---
+
+## ⚠️ Solución de Problemas: El Repositorio ya Existe
+
+Si CloudFormation falla con un error `AlreadyExists` para el repositorio ECR (`gbt-application`), significa que el repositorio ya existe en tu cuenta de AWS. Sigue estos pasos para "importarlo" y permitir que CloudFormation lo gestione.
+
+### 1. Prepara el Archivo de Importación
+
+Crea un archivo llamado `resources-to-import.txt` con el siguiente contenido. Esto le dice a CloudFormation qué recurso existente corresponde a qué recurso en la plantilla.
+
+```text
+[
+    {
+        "ResourceType":"AWS::ECR::Repository",
+        "LogicalResourceId":"ECRRepository",
+        "ResourceIdentifier": {
+            "RepositoryName":"gbt-application"
+        }
+    }
+]
+```
+
+### 2. Ejecuta el Despliegue de Importación
+
+Ejecuta el siguiente comando. En lugar de `create-stack`, usarás `deploy` con la opción `--no-execute-changeset` para revisar los cambios, y luego `import-existing-resources`.
+
+```bash
+aws cloudformation deploy \
+  --stack-name gbt-application \
+  --template-file cloudformation/backend.yaml \
+  --parameter-overrides $(cat params.json | jq -r 'map(.ParameterKey + "=" + .ParameterValue) | join(" ")') \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --no-execute-changeset
+
+aws cloudformation import-existing-resources \
+  --stack-name gbt-application \
+  --resources-to-import file://resources-to-import.txt
+```
+
+Después de que la importación sea exitosa, tu stack estará sincronizado y podrás realizar actualizaciones normalmente.
 
 ---
 
@@ -110,7 +155,36 @@ aws ecs update-service \
 
 ---
 
-## Actualizar la Aplicación
+## 3. Verificar el Despliegue
+
+Una vez que el servicio está en ejecución, la tarea de ECS tendrá una IP pública asignada. Usa los siguientes comandos para encontrarla.
+
+### 3.1 Encontrar la IP Pública de la Tarea
+
+1.  **Listar las tareas en ejecución:**
+    ```bash
+    aws ecs list-tasks --cluster gbt-application-prod-cluster --service-name gbt-application-prod-service --query 'taskArns[0]' --output text --region <tu-región>
+    ```
+
+2.  **Describir la tarea para obtener su IP pública:**
+    Copia el ARN de la tarea del comando anterior y úsalo aquí.
+    ```bash
+    aws ecs describe-tasks --cluster gbt-application-prod-cluster --tasks <ARN_DE_LA_TAREA> --query 'tasks[0].attachments[0].details[?name==`publicIPv4Address`].value' --output text --region <tu-región>
+    ```
+
+### 3.2 Probar la Aplicación
+
+Una vez que tengas la IP pública, puedes acceder a la aplicación en el puerto `8080`. Por ejemplo:
+
+```bash
+curl http://<IP_PÚBLICA_DE_LA_TAREA>:8080/api/funds
+```
+
+También puedes abrir `http://<IP_PÚBLICA_DE_LA_TAREA>:8080/swagger-ui/index.html` en tu navegador para ver la documentación de la API de Swagger.
+
+---
+
+## 4. Actualizar la Aplicación
 
 1.  **Construye y publica la nueva imagen Docker** (pasos 2.1 y 2.2).
 2.  **Fuerza un nuevo despliegue en ECS** para que el servicio tome la imagen actualizada.
@@ -125,7 +199,7 @@ aws ecs update-service \
 
 ---
 
-## Limpieza
+## 5. Limpieza
 
 1.  **Escala el servicio a 0 tareas:**
     ```bash
@@ -142,6 +216,7 @@ aws ecs update-service \
     ```
 
 3.  **Elimina el repositorio ECR (opcional):**
+    CloudFormation no eliminará el repositorio si contiene imágenes. Si deseas borrarlo, primero elimina todas las imágenes y luego ejecuta:
     ```bash
-    aws ecr delete-repository --repository-name gbt-application-prod --force --region <tu-región>
+    aws ecr delete-repository --repository-name gbt-application --force --region <tu-región>
     ```
